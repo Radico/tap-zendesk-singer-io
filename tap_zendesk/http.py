@@ -1,5 +1,6 @@
 from time import sleep
 from asyncio import sleep as async_sleep
+import base64
 import backoff
 import requests
 import singer
@@ -153,11 +154,39 @@ def call_api(url, request_timeout, params, headers):
     raise_for_error(response)
     return response
 
-def get_cursor_based(url, access_token, request_timeout, page_size, cursor=None, **kwargs):
+def build_auth_headers(config):
+    """
+    Build the Authorization header for a Zendesk API request.
+
+    Prefers OAuth (`access_token`) when configured. Otherwise falls back to
+    HTTP Basic auth using `email`/`api_token` -- Zendesk's documented API
+    token format (username `{email}/token`, password the API token). Every
+    caller in this module used to hardcode `Bearer {access_token}` directly,
+    which raised `KeyError` for API-token-only configs (Simon-Data fix; see
+    https://github.com/singer-io/tap-zendesk/issues/126).
+    """
+    access_token = config.get('access_token')
+    if access_token:
+        return {'Authorization': 'Bearer {}'.format(access_token)}
+
+    email = config.get('email')
+    api_token = config.get('api_token')
+    if email and api_token:
+        basic = base64.b64encode(
+            '{}/token:{}'.format(email, api_token).encode('utf-8')
+        ).decode('ascii')
+        return {'Authorization': 'Basic {}'.format(basic)}
+
+    raise ValueError(
+        "No usable Zendesk credentials in config: expected either "
+        "'access_token' (OAuth) or both 'email' and 'api_token' (API token auth)."
+    )
+
+def get_cursor_based(url, config, request_timeout, page_size, cursor=None, **kwargs):
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': 'Bearer {}'.format(access_token),
+        **build_auth_headers(config),
         **kwargs.get('headers', {})
     }
 
@@ -292,14 +321,14 @@ async def call_api_async(session, url, request_timeout, params, headers):
         return response_json
 
 
-async def paginate_ticket_audits(session, url, access_token, request_timeout, page_size, **kwargs):
+async def paginate_ticket_audits(session, url, config, request_timeout, page_size, **kwargs):
     """
     Paginate through the ticket audits API endpoint and return the aggregated results
     """
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': 'Bearer {}'.format(access_token),
+        **build_auth_headers(config),
         **kwargs.get('headers', {})
     }
 
@@ -333,11 +362,11 @@ async def paginate_ticket_audits(session, url, access_token, request_timeout, pa
 
     return initial_response
 
-def get_incremental_export(url, access_token, request_timeout, start_time, side_load):
+def get_incremental_export(url, config, request_timeout, start_time, side_load):
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': 'Bearer {}'.format(access_token),
+        **build_auth_headers(config),
     }
 
     params = {'start_time': start_time}
