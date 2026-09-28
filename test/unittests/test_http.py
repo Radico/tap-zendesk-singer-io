@@ -1,3 +1,4 @@
+import base64
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from tap_zendesk import http, streams
@@ -40,6 +41,39 @@ class Mockresponse:
         return self.text
 
 
+class TestBuildAuthHeaders(unittest.TestCase):
+    """
+    Simon-Data fix: `build_auth_headers` must build a Bearer header for
+    OAuth config and a Basic header for email/api_token config, instead of
+    every caller hardcoding `Bearer {config["access_token"]}` and raising
+    `KeyError` for API-token-only configs.
+    See https://github.com/singer-io/tap-zendesk/issues/126.
+    """
+
+    def test_prefers_oauth_bearer_when_access_token_present(self):
+        config = {
+            "access_token": "oauth_token",
+            "email": "bot@example.com",
+            "api_token": "should_be_ignored",
+        }
+        self.assertEqual(
+            http.build_auth_headers(config),
+            {"Authorization": "Bearer oauth_token"},
+        )
+
+    def test_builds_basic_auth_from_email_and_api_token(self):
+        config = {"email": "bot@example.com", "api_token": "tok"}
+        headers = http.build_auth_headers(config)
+
+        # base64("bot@example.com/token:tok")
+        expected_b64 = base64.b64encode(b"bot@example.com/token:tok").decode("ascii")
+        self.assertEqual(headers, {"Authorization": "Basic {}".format(expected_b64)})
+
+    def test_raises_when_no_usable_credentials(self):
+        with self.assertRaises(ValueError):
+            http.build_auth_headers({"subdomain": "example"})
+
+
 SINGLE_RESPONSE = {"meta": {"has_more": False}}
 
 PAGINATE_RESPONSE = {"meta": {"has_more": True, "after_cursor": "some_cursor"}}
@@ -79,7 +113,7 @@ class TestBackoff(unittest.TestCase):
         responses = [
             response
             for response in http.get_cursor_based(url="some_url",
-                                                  access_token="some_token",
+                                                  config={"access_token": "some_token"},
                                                   request_timeout=REQUEST_TIMEOUT,
                                                   page_size=PAGE_SIZE)
         ]
@@ -101,7 +135,7 @@ class TestBackoff(unittest.TestCase):
         responses = [
             response
             for response in http.get_cursor_based(url="some_url",
-                                                  access_token="some_token",
+                                                  config={"access_token": "some_token"},
                                                   request_timeout=REQUEST_TIMEOUT,
                                                   page_size=PAGE_SIZE)
         ]
@@ -138,7 +172,7 @@ class TestBackoff(unittest.TestCase):
         responses = [
             response
             for response in http.get_cursor_based(url="some_url",
-                                                  access_token="some_token",
+                                                  config={"access_token": "some_token"},
                                                   request_timeout=REQUEST_TIMEOUT,
                                                   page_size=PAGE_SIZE)
         ]
@@ -157,7 +191,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -183,7 +217,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -206,7 +240,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -229,7 +263,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -251,7 +285,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -269,7 +303,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -293,7 +327,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -320,7 +354,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -344,7 +378,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -368,7 +402,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -432,7 +466,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -456,7 +490,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -480,7 +514,7 @@ class TestBackoff(unittest.TestCase):
             responses = [
                 response
                 for response in http.get_cursor_based(url="some_url",
-                                                      access_token="some_token",
+                                                      config={"access_token": "some_token"},
                                                       request_timeout=300,
                                                       page_size=PAGE_SIZE)
             ]
@@ -861,7 +895,7 @@ class TestAPIAsync(unittest.TestCase):
         Test that paginate_ticket_audits correctly paginates through multiple pages of results.
         """
         url = "https://api.example.com/resource"
-        access_token = "test_token"
+        config = {"access_token": "test_token"}
         page_size = 2
         first_page = {
             "audits": [{"id": 1}, {"id": 2}],
@@ -913,7 +947,7 @@ class TestAPIAsync(unittest.TestCase):
         async def run_test():
             async with ClientSession() as session:
                 result = await http.paginate_ticket_audits(
-                    session, url, access_token, 10, page_size
+                    session, url, config, 10, page_size
                 )
                 self.assertEqual(result, expected_result)
 

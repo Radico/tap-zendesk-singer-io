@@ -61,7 +61,7 @@ class TestRequestTimeoutBackoff(unittest.TestCase):
 
         try:
             responses = [response for response in http.get_cursor_based(url='some_url',
-                                                                        access_token='some_token',
+                                                                        config={'access_token': 'some_token'},
                                                                         request_timeout=REQUEST_TIMEOUT,
                                                                         page_size=PAGE_SIZE)]
         except requests.exceptions.Timeout as e:
@@ -71,7 +71,7 @@ class TestRequestTimeoutBackoff(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 5)
 
     @patch('requests.get', side_effect=[mocked_get(status_code=200, json={"key1": "val1", **PAGINATE_RESPONSE}),
-                                        requests.exceptions.Timeout, requests.exceptions.Timeout, 
+                                        requests.exceptions.Timeout, requests.exceptions.Timeout,
                                         mocked_get(status_code=200, json={"key1": "val1", **SINGLE_RESPONSE})])
     def test_get_cursor_based_handles_timeout_error_in_pagination_call(self, mock_get, mock_sleep):
         """We mock request method to raise a `Timeout`. In next page call the tap should retry request timeout error.
@@ -79,7 +79,7 @@ class TestRequestTimeoutBackoff(unittest.TestCase):
 
         try:
             responses = [response for response in http.get_cursor_based(url='some_url',
-                                                                        access_token='some_token',
+                                                                        config={'access_token': 'some_token'},
                                                                         request_timeout=REQUEST_TIMEOUT,
                                                                         page_size=PAGE_SIZE)]
         except requests.exceptions.Timeout as e:
@@ -128,7 +128,7 @@ class TestRequestTimeoutBackoff(unittest.TestCase):
         """
 
         try:
-            responses = [response for response in http.get_incremental_export(url='some_url',access_token='some_token', 
+            responses = [response for response in http.get_incremental_export(url='some_url',config={'access_token': 'some_token'},
                                                                               request_timeout=REQUEST_TIMEOUT, start_time= datetime.datetime.utcnow(), side_load=None)]
         except requests.exceptions.Timeout as e:
             pass

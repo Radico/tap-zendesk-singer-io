@@ -581,3 +581,35 @@ class TestCheckAccessOptionalStreams(unittest.TestCase):
             stream = SatisfactionRatings(MagicMock(), self.CONFIG)
             with self.assertRaises(http.ZendeskInternalServerError):
                 stream.check_access()
+
+
+class TestCheckAccessApiTokenAuth(unittest.TestCase):
+    '''
+    Simon-Data fix: streams whose check_access()/get_objects() previously
+    hardcoded `config["access_token"]` must work with email/api_token config
+    too, instead of raising KeyError. See https://github.com/singer-io/tap-zendesk/issues/126.
+    Covers the base Stream.check_access() (used by Groups/Tags/TicketFields/
+    SatisfactionRatings/GroupMemberships) plus CursorBasedStream.get_objects(),
+    the two failure modes confirmed against a real Zendesk instance.
+    '''
+
+    API_TOKEN_CONFIG = {
+        'subdomain': 'testaccount',
+        'email': 'bot@example.com',
+        'api_token': 'tok',
+        'start_date': START_DATE,
+    }
+
+    def test_base_check_access_does_not_require_access_token(self):
+        with patch('requests.get', return_value=mocked_get(status_code=200, json={})):
+            stream = SatisfactionRatings(MagicMock(), self.API_TOKEN_CONFIG)
+            stream.check_access()  # must not raise KeyError('access_token')
+
+    def test_cursor_based_get_objects_does_not_require_access_token(self):
+        from tap_zendesk.streams import Groups
+
+        with patch('requests.get', return_value=mocked_get(
+                status_code=200, json={'groups': [], 'meta': {'has_more': False}})):
+            stream = Groups(MagicMock(), self.API_TOKEN_CONFIG)
+            stream.endpoint = 'https://{}.zendesk.com/api/v2/groups'
+            list(stream.get_objects())  # must not raise KeyError('access_token')
